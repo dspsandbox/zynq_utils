@@ -1,0 +1,10 @@
+[Unit]
+Description=System Watchdog Timer
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/share/zynq_tcp_ctrl_server.py
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

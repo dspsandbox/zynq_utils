@@ -2,6 +2,7 @@
 import socket
 import struct
 import numpy as np
+import math
 
 OP_WRITE = 1
 OP_READ  = 2
@@ -45,35 +46,39 @@ class ZynqTcpCtrlClient:
         raise RuntimeError(msg)
 
     def write(self, address, val):
-        if not isinstance(val, (int, bytes, bytearray, memoryview)):
-            raise TypeError("content must be of type int (mapped to uint32), ndarray, bytes, bytearray or memoryview")
+        if not isinstance(val, (int, bytes, np.ndarray)):
+            raise TypeError("content must be of type bytes, int (mapped to uint32) or numpy.ndarray")
         if isinstance(val, int):
             content = np.array([val], dtype=np.uint32).tobytes()
         elif isinstance(val, np.ndarray):
             content = val.tobytes()
-        elif isinstance(val, memoryview):
-            content = val.tobytes()
-        elif isinstance(val, bytearray):
-            content = bytes(val)
         else:  # bytes
             content = val
         self.sock.sendall(REQ_HDR.pack(OP_WRITE, address, len(content)) + content)
         _ = self._recv_response()  # should be empty on OK
 
-    def read(self, address, dtype=np.uint32, length=1):
+    def read(self, address, dtype=np.uint32, size=1):
         if dtype == bytes:
-            size = length
-        else:   
-            size = np.dtype(dtype).itemsize * length
-        self.sock.sendall(REQ_HDR.pack(OP_READ, address, size))
+            if isinstance(size, int):
+                size_bytes = size
+            else:
+                raise TypeError("for dtype=bytes, size must be an integer")
+        else:
+            if isinstance(size, int):
+                size_bytes = size * np.dtype(dtype).itemsize 
+            size_bytes = math.prod(size) * np.dtype(dtype).itemsize 
+        
+        self.sock.sendall(REQ_HDR.pack(OP_READ, address, size_bytes))
+        
+        data_bytes = self._recv_response()
         if dtype == bytes:
-            return self._recv_response()
+            return data_bytes
         else:
-            data_array = np.frombuffer(self._recv_response(), dtype=dtype, count=length)
-        if length == 1:
-            return data_array[0]
-        else:
-            return data_array
+            data_array = np.frombuffer(data_bytes, dtype=dtype)
+            if size == 1:
+                return data_array[0]
+            else:
+                return np.reshape(data_array, size)
 
     def add_mmap_region(self, address: int, size: int):
         self.sock.sendall(REQ_HDR.pack(OP_ADD_MMAP, address, size))

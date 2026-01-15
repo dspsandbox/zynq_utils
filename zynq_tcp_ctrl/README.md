@@ -1,7 +1,7 @@
 # ZYNQ TCP CONTROL
 
-## INSTALLATION
-### REMOTE 
+## Remote Installation
+###  
 * Open terminal window
 * Transfer [remote](remote) directory to ZYNQ FPGA
 
@@ -25,7 +25,22 @@
     ```
 
 
-### Local 
+## Local Installation
 * Open a terminal window
-* Navigate to 
-* Install on your PC the [zynq_tcp_ctrl](local/zynq_tcp_ctrl) library by opening 
+* Navigate to [local/zynq_tcp_ctrl](local/zynq_tcp_ctrl/)
+    ```
+    cd local/zynq_tcp_ctrl/
+    ```
+* Install on your PC the *zynq_tcp_ctrl* python library
+    ```
+    pip3 install .
+    ```
+
+## Example Script
+
+* Run [local/example/example_zynq_tcp_ctrl.py](local/example/example_zynq_tcp_ctrl.py):
+    ```
+    python3 local/example/example_zynq_tcp_ctrl.py
+    ```
+
+

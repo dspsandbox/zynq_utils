@@ -7,6 +7,7 @@ import math
 OP_WRITE = 1
 OP_READ  = 2
 OP_ADD_MMAP = 3
+OP_LOAD_BIT = 4
 
 STATUS_OK  = 0
 STATUS_ERR = 1
@@ -83,4 +84,22 @@ class ZynqTcpCtrlClient:
     def add_mmap_region(self, address: int, size: int):
         self.sock.sendall(REQ_HDR.pack(OP_ADD_MMAP, address, size))
         _ = self._recv_response()  # should be empty on OK  
+    
+    def _bit2bin(self, bit_data):
+        bin_data = bytes(np.frombuffer(bit_data, "i4").byteswap())
+        return bin_data
+
+    def load_bitstream(self, path, fpgautil=True):
+        if path.endswith('.bin'):
+            with open(path, "rb") as f:
+                bin_data = f.read()
+        elif path.endswith('.bit'):
+            with open(path, "rb") as f:
+                bit_data = f.read()
+            bin_data = self._bit2bin(bit_data)
+        else:
+            raise ValueError("File must be .bin or .bit format")
         
+        self.sock.sendall(REQ_HDR.pack(OP_LOAD_BIT, 0, len(1 + bin_data)) + bytes([fpgautil]) + bin_data)
+        _ = self._recv_response()  # should be empty on OK
+

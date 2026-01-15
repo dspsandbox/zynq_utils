@@ -9,6 +9,7 @@ import numpy as np
 OP_WRITE = 1
 OP_READ  = 2
 OP_ADD_MMAP = 3
+OP_LOAD_BIT = 4
 
 STATUS_OK  = 0
 STATUS_ERR = 1
@@ -36,7 +37,7 @@ class ZynqTcpCtrlServer:
         self.host = host
         self.port = port
         self.lock = threading.Lock()
-        self.mmap_dict = {}  # address -> mmap object
+        self.mmap_dict = {}  
 
 
     def add_mmap_region(self, address: int, size: int):
@@ -67,6 +68,8 @@ class ZynqTcpCtrlServer:
                 return mm
         raise RuntimeError("no mmap region covers the requested address range")
 
+    def _load_bitstream(self, bitstream_data: bytes):
+        print("Load bitstream placeholder")
 
     def read_mmap_region(self, address: int, size: int):
         mm = self._get_mmap_region(address, size)
@@ -77,18 +80,30 @@ class ZynqTcpCtrlServer:
         mm = self._get_mmap_region(address, size)
         mm[:size] = data[:]
 
+    def load_bitstream_fpgautil(self, data_bin: bytes):
+        bistream_path = "/tmp/temp_bitstream.bin"
+        with open(bistream_path, "wb") as f:
+            f.write(bitstream_data)
+        os.system(f"fpgautil -b {bistream_path}")
+        os.remove(bistream_path)
+
+    def load_bitstream_fpgamanager(self, data_bin: bytes):
+        os.system("echo 0 > /sys/class/fpga_manager/fpga0/flags")
+        os.system("mkdir -p /lib/firmware")
+        with open("/lib/firmware/bitstream.bin", "wb") as f:
+            os.system(data_bin)
+        os.system("echo bitstream.bin > /sys/class/fpga_manager/fpga0/firmware")
+
     def _handle_client(self, conn: socket.socket, addr):
         try:
             while True:
                 hdr = recv_exact(conn, REQ_HDR.size)  # may raise ConnectionError
                 opcode, address, size = REQ_HDR.unpack(hdr)
                 
-
                 if opcode == OP_ADD_MMAP:
                     with self.lock:
                         self.add_mmap_region(address, size)
                     send_response(conn, STATUS_OK)
-
 
                 elif opcode == OP_WRITE:
                     data = recv_exact(conn, size)
@@ -100,6 +115,17 @@ class ZynqTcpCtrlServer:
                     with self.lock:
                         data = self.read_mmap_region(address, size)
                     send_response(conn, STATUS_OK, data)
+
+                elif opcode == OP_LOAD_BIT:
+                    data = recv_exact(conn, size)
+                    fpgautil_flag = bool(data[0])
+                    data_bin = data[1:]
+                    with self.lock:
+                        if fpgautil_flag:
+                            self.load_bitstream_fpgautil(data_bin)
+                        else:
+                            self.load_bitstream_fpgamanager(data_bin)
+                    send_response(conn, STATUS_OK)
 
                 else:
                     send_response(conn, STATUS_ERR, b"unknown opcode")

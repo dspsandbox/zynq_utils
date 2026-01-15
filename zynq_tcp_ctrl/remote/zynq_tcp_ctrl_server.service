@@ -1,5 +1,5 @@
 [Unit]
-Description=System Watchdog Timer
+Description=ZYNQ TCP Control Server
 
 [Service]
 ExecStart=/usr/bin/python3 /usr/share/zynq_tcp_ctrl_server.py

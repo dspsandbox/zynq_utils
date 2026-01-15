@@ -39,4 +39,5 @@ print(f"Read {data_rx.nbytes * 8/ 1e6} Mb in {t1 - t0:.6f} s")
 #Data check
 print("Data match:", np.array_equal(data_tx, data_rx))
 
+c.load_bitstream("test.bit")  # Example of loading a bitstream
 c.close()

@@ -5,6 +5,8 @@ import threading
 import mmap
 import os
 import numpy as np
+import subprocess
+
 
 OP_WRITE = 1
 OP_READ  = 2
@@ -16,6 +18,13 @@ STATUS_ERR = 1
 
 REQ_HDR = struct.Struct("!BQI")   # opcode (1), address (8), size (4)
 RESP_HDR = struct.Struct("!BI")   # status (1), size (4)
+
+def execute_shell(cmd, raise_on_err=True):
+    result = subprocess.run(cmd, capture_output=True,text=True, shell=True)
+    if raise_on_err and result.returncode != 0:
+        raise RuntimeError(f"command '{cmd}' failed with error: {result.stderr.strip()}")
+    return result
+
 
 def recv_exact(sock: socket.socket, n: int) -> bytes:
     """Receive exactly n bytes or raise ConnectionError."""
@@ -33,14 +42,16 @@ def send_response(sock: socket.socket, status: int, payload: bytes = b"") -> Non
     sock.sendall(RESP_HDR.pack(status, len(payload)) + payload)
 
 class ZynqTcpCtrlServer:
-    def __init__(self, host="0.0.0.0", port=9000):
+    def __init__(self, host, port):
         self.host = host
         self.port = port
         self.lock = threading.Lock()
         self.mmap_dict = {}  
+        self._fp = "/sys/class/fpga_manager/fpga0"
 
 
     def add_mmap_region(self, address: int, size: int):
+        size = max(size, 1)
         region_already_mapped = False
         for i in range(len(self.mmap_dict)):
             mmap_item = self.mmap_dict[i]
@@ -53,46 +64,36 @@ class ZynqTcpCtrlServer:
             size_page_aligned = size + (address - offset_page_aligned)
             f = os.open('/dev/mem', os.O_RDWR | os.O_SYNC)
             self.mmap_dict[len(self.mmap_dict)] = {
-                "address": address,
-                "size": size,
-                "mmap": mmap.mmap(f, size_page_aligned, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE,offset=offset_page_aligned)
+                "address": offset_page_aligned,
+                "size": size_page_aligned,
+                "mmap": memoryview(mmap.mmap(f, size_page_aligned, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE,offset=offset_page_aligned))
             }
         
       
     def _get_mmap_region(self, address: int, size: int):
         for i in range(len(self.mmap_dict)):
             mmap_item = self.mmap_dict[i]
-            if address >= mmap_item['address'] and address + size <= mmap_item["address"] + mmap_item["size"]:
+            if (address >= mmap_item['address']) and ((address + size) <= mmap_item["address"] + mmap_item["size"]):
                 mm =  mmap_item["mmap"]
-                mm.seek(address - mmap_item['address'])
-                return mm
+                return mm[address - mmap_item['address'] : address - mmap_item['address'] + size]
         raise RuntimeError("no mmap region covers the requested address range")
 
-    def _load_bitstream(self, bitstream_data: bytes):
-        print("Load bitstream placeholder")
 
     def read_mmap_region(self, address: int, size: int):
         mm = self._get_mmap_region(address, size)
-        return mm[:size]  
+        return mm
     
     def write_mmap_region(self, address: int, data: bytes):
         size = len(data)
         mm = self._get_mmap_region(address, size)
-        mm[:size] = data[:]
+        mm[:] = data[:]
 
-    def load_bitstream_fpgautil(self, data_bin: bytes):
-        bistream_path = "/tmp/temp_bitstream.bin"
-        with open(bistream_path, "wb") as f:
-            f.write(bitstream_data)
-        os.system(f"fpgautil -b {bistream_path}")
-        os.remove(bistream_path)
-
-    def load_bitstream_fpgamanager(self, data_bin: bytes):
-        os.system("echo 0 > /sys/class/fpga_manager/fpga0/flags")
-        os.system("mkdir -p /lib/firmware")
+    def load_bitstream_fpgamanager(self, bin_data):
+        execute_shell("echo 0 > /sys/class/fpga_manager/fpga0/flags")
+        execute_shell("mkdir -p /lib/firmware")
         with open("/lib/firmware/bitstream.bin", "wb") as f:
-            os.system(data_bin)
-        os.system("echo bitstream.bin > /sys/class/fpga_manager/fpga0/firmware")
+            f.write(bin_data)
+        execute_shell("echo bitstream.bin > /sys/class/fpga_manager/fpga0/firmware")
 
     def _handle_client(self, conn: socket.socket, addr):
         try:
@@ -114,17 +115,11 @@ class ZynqTcpCtrlServer:
                 elif opcode == OP_READ:                    
                     with self.lock:
                         data = self.read_mmap_region(address, size)
-                    send_response(conn, STATUS_OK, data)
+                    send_response(conn, STATUS_OK, bytearray(data))
 
                 elif opcode == OP_LOAD_BIT:
-                    data = recv_exact(conn, size)
-                    fpgautil_flag = bool(data[0])
-                    data_bin = data[1:]
-                    with self.lock:
-                        if fpgautil_flag:
-                            self.load_bitstream_fpgautil(data_bin)
-                        else:
-                            self.load_bitstream_fpgamanager(data_bin)
+                    bin_data = recv_exact(conn, size)        
+                    self.load_bitstream_fpgamanager(bin_data)
                     send_response(conn, STATUS_OK)
 
                 else:
@@ -154,4 +149,4 @@ class ZynqTcpCtrlServer:
                 t.start()
 
 if __name__ == "__main__":
-    ZynqTcpCtrlServer(host="0.0.0.0", port=9001).serve_forever()
+    ZynqTcpCtrlServer(host="0.0.0.0", port=9000).serve_forever()

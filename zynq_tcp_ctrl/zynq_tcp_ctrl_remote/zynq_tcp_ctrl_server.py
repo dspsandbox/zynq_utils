@@ -8,6 +8,9 @@ import numpy as np
 import subprocess
 
 
+TCP_IP = "0.0.0.0"
+TCP_PORT = 9000
+
 OP_WRITE = 1
 OP_READ  = 2
 OP_ADD_MMAP = 3
@@ -149,4 +152,4 @@ class ZynqTcpCtrlServer:
                 t.start()
 
 if __name__ == "__main__":
-    ZynqTcpCtrlServer(host="0.0.0.0", port=9000).serve_forever()
+    ZynqTcpCtrlServer(host=TCP_IP, port=TCP_PORT).serve_forever()

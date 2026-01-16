@@ -6,11 +6,11 @@ import time
 FPGA_IP = "192.168.1.143"
 
 #Memory map regions configuration (defined in https://github.com/RedPitaya/RedPitaya-FPGA/blob/master/dts/memory.dtsi)
-MMAP_REGION_ADDR = 0x100_0000 
+MMAP_REGION_ADDR = 0x8000_0000 
 MMAP_REGION_SIZE = 0x200_0000
 
 #Example addr & data 
-addr = 0x100_0050
+addr = 0x8000_0050
 data_tx = np.random.randint(low=-2**15, 
                             high= 2**15, 
                             size=(1000, 8, 80), 

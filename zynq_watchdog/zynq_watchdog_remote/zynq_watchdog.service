@@ -1,0 +1,10 @@
+[Unit]
+Description=Zynq 7000 Watchdog
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/share/zynq_watchdog.py 60 100000000
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

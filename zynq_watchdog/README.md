@@ -1,4 +1,4 @@
-# ZYNQ Watchdog Service
+# Zynq-7000 Watchdog Service
 ## Overview
 This project creates a watchdog service for Zynq-7000 FPGAs that restarts the FPGA in case it becomes stale (60s timeout).
 

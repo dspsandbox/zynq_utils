@@ -46,8 +46,8 @@ See examples [led_blink.py](example_redpitaya-125-14/led_blink.py) and [reserved
 * Run the [led_blink.py](example_redpitaya-125-14/led_blink.py) and [reserved_mem.py](example_redpitaya-125-14/reserved_mem.py) examples on your Redpitaya-125-14:
     ```
     cd examples_redpitaya-125-14
-    python3 example_redpitaya-125-14/led_blink.py
-    python3 example_redpitaya-125-14/reserved_mem.py
+    python3 led_blink.py
+    python3 reserved_mem.py
     ```
 
 

@@ -3,7 +3,7 @@
 This project creates a watchdog service for Zynq-7000 FPGAs that restarts the FPGA in case it becomes stale (60s timeout).
 
 ## Configuration
-Open [zynq_watchdog_remote/zynq_watchdog.service](zynq_watchdog_remote/zynq_watchdog.service) and edit line 5 to hold the timeout in seconds (default: 60) and cpu_1x clock frequency in Hz (default: 100000000).
+Open [zynq_watchdog_remote/zynq_watchdog.service](zynq_watchdog_remote/zynq_watchdog.service) and edit line 5 to set the timeout in seconds (default: 60) and cpu_1x clock frequency in Hz (default: 100000000).
 
 
 ## Remote Installation

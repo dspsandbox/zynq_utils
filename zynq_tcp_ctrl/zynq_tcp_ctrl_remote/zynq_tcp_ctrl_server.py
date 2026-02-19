@@ -15,6 +15,7 @@ OP_WRITE = 1
 OP_READ  = 2
 OP_ADD_MMAP = 3
 OP_LOAD_BIT = 4
+OP_GET_BIT_CHECKSUM = 5
 
 STATUS_OK  = 0
 STATUS_ERR = 1
@@ -51,6 +52,7 @@ class ZynqTcpCtrlServer:
         self.lock = threading.Lock()
         self.mmap_dict = {}  
         self._fp = "/sys/class/fpga_manager/fpga0"
+        self._bitstream_checksum = 0
 
 
     def add_mmap_region(self, address: int, size: int):
@@ -97,7 +99,11 @@ class ZynqTcpCtrlServer:
         with open("/lib/firmware/bitstream.bin", "wb") as f:
             f.write(bin_data)
         execute_shell("echo bitstream.bin > /sys/class/fpga_manager/fpga0/firmware")
+        self._bitstream_checksum = sum(bin_data) % (0x1_0000_0000)  # simple checksum for verification
 
+    def get_bitstream_checksum(self):
+        return self._bitstream_checksum
+    
     def _handle_client(self, conn: socket.socket, addr):
         try:
             while True:
@@ -124,6 +130,10 @@ class ZynqTcpCtrlServer:
                     bin_data = recv_exact(conn, size)        
                     self.load_bitstream_fpgamanager(bin_data)
                     send_response(conn, STATUS_OK)
+                
+                elif opcode == OP_GET_BIT_CHECKSUM:
+                    checksum = self.get_bitstream_checksum()
+                    send_response(conn, STATUS_OK, struct.pack("!I", checksum))
 
                 else:
                     send_response(conn, STATUS_ERR, b"unknown opcode")

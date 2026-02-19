@@ -10,6 +10,7 @@ OP_WRITE = 1
 OP_READ  = 2
 OP_ADD_MMAP = 3
 OP_LOAD_BIT = 4
+OP_GET_BIT_CHECKSUM = 5
 
 STATUS_OK  = 0
 STATUS_ERR = 1
@@ -114,12 +115,19 @@ class ZynqTcpCtrlClient:
         self.sock.sendall(REQ_HDR.pack(OP_ADD_MMAP, address, size))
         _ = self._recv_response()  # should be empty on OK  
 
+
+    def _get_bitstream_checksum(self):
+        self.sock.sendall(REQ_HDR.pack(OP_GET_BIT_CHECKSUM, 0, 0))
+        payload = self._recv_response()
+        checksum = struct.unpack("!I", payload)[0]
+        return checksum
     
-    def load_bitstream(self, path):
+    def load_bitstream(self, path, force=False):
         """
         Load a bitstream into the FPGA using the Linux FPGA Manager interface. 
         The bitstream file can be either in .bit or .bin format.
         :param path: Path to the bitstream file (.bit or .bin).
+        :param force: If True, forces loading the bitstream even if the checksum matches the currently loaded one.
         """ 
         if path.endswith('.bin'):
             with open(path, "rb") as f:
@@ -130,6 +138,13 @@ class ZynqTcpCtrlClient:
         else:
             raise ValueError("File must be .bin or .bit format")
         
+        if not force:
+            # Check if the bitstream is already loaded by comparing checksums
+            checksum_old = self._get_bitstream_checksum()
+            checksum_new = sum(bin_data) % (0x1_0000_0000)
+            if checksum_old == checksum_new:
+                return
+
         self.sock.sendall(REQ_HDR.pack(OP_LOAD_BIT, 0, len(bin_data)) + bin_data)
         _ = self._recv_response()  # should be empty on OK
 

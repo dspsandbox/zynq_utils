@@ -23,7 +23,7 @@ c.add_mmap_region(MMAP_REGION_ADDR, MMAP_REGION_SIZE)
 #Load bitstream (prebuilt base design of https://github.com/dspsandbox/Pynq-Redpitaya-125)
 t0 = time.time()
 bitstream_path = "prebuilt/base.bit"
-c.load_bitstream(bitstream_path)  
+c.load_bitstream(bitstream_path, force=False)  
 t1 = time.time()
 print(f"Loaded bitstream in {t1 - t0:.6f} s")
 

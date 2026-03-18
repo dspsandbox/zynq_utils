@@ -18,7 +18,16 @@ STATUS_ERR = 1
 REQ_HDR = struct.Struct("!BQI")  # opcode, address, size
 RESP_HDR = struct.Struct("!BI")  # status, size
 
-
+def recv_exact(sock: socket.socket, n: int) -> bytes:
+    chunks = []
+    remaining = n
+    while remaining:
+        chunk = sock.recv(remaining)
+        if not chunk:
+            raise ConnectionError("server closed")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
 
 
 class ZynqTcpCtrlClient:
@@ -29,17 +38,8 @@ class ZynqTcpCtrlClient:
         :param port: TCP port of the server (default: 9000).
         :param timeout: Connection timeout in seconds (default: 5.0).
         """
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-        self.sock = None
-        self._create_socket()
+        self.sock = socket.create_connection((host, port), timeout=timeout)
 
-    def _create_socket(self):
-        if self.sock is None:
-            self.sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
-       
-       
 
     def close(self):
         """
@@ -66,8 +66,8 @@ class ZynqTcpCtrlClient:
             content = val.tobytes()
         else:  # bytes
             content = val
-
-        self._transfer(opcode=OP_WRITE, address=addr, size=len(content), payload=content)
+        self.sock.sendall(REQ_HDR.pack(OP_WRITE, addr, len(content)) + content)
+        _ = self._recv_response()  # should be empty on OK
 
     def read(self, addr, dtype=np.uint32, size=1):
         """
@@ -90,8 +90,9 @@ class ZynqTcpCtrlClient:
             else:
                 size_bytes = math.prod(size) * np.dtype(dtype).itemsize 
         
-        data_bytes = self._transfer(opcode=OP_READ, address=addr, size=size_bytes)
-
+        self.sock.sendall(REQ_HDR.pack(OP_READ, addr, size_bytes))
+        
+        data_bytes = self._recv_response()
         if dtype == bytes:
             return data_bytes
         else:
@@ -101,20 +102,23 @@ class ZynqTcpCtrlClient:
             else:
                 return np.reshape(data_array, size)
 
-    def add_mmap_region(self, addr: int, size: int):
+    def add_mmap_region(self, address: int, size: int):
         """
         Create a memory-mapped region for remote read/write operations. In case of more than one region, 
         call this method multiple times with the corresponding address and size parameters. If the new region
         is equal to or a subset of an already mapped region, the call will be ignored. Created memory-mapped
         regions will stay mapped for the lifetime of the remote service (until FPGA is restarted). 
 
-        :param addr: Base address of the memory-mapped region.
+        :param address: Base address of the memory-mapped region.
         :param size: Size (in bytes) of the memory-mapped region.
         """
-        self._transfer(opcode=OP_ADD_MMAP, address=addr, size=size)
+        self.sock.sendall(REQ_HDR.pack(OP_ADD_MMAP, address, size))
+        _ = self._recv_response()  # should be empty on OK  
+
 
     def _get_bitstream_checksum(self):
-        payload = self._transfer(opcode=OP_GET_BIT_CHECKSUM, address=0, size=0)
+        self.sock.sendall(REQ_HDR.pack(OP_GET_BIT_CHECKSUM, 0, 0))
+        payload = self._recv_response()
         checksum = struct.unpack("!I", payload)[0]
         return checksum
     
@@ -140,39 +144,16 @@ class ZynqTcpCtrlClient:
             checksum_new = sum(bin_data) % (0x1_0000_0000)
             if checksum_old == checksum_new:
                 return
-            
-        self._transfer(opcode=OP_LOAD_BIT, address=0, size=len(bin_data), payload=bin_data)
-    
 
-    def _transfer(self, opcode, address=0, size=0, payload=b""):
-        self._create_socket()
-        try:
-            self.sock.sendall(REQ_HDR.pack(opcode, address, size) + payload)
-            response = self._recv_response()
-        except Exception as e:
-            self.sock = None
-            raise Exception(f"Communication error: {e}")
-        return response
+        self.sock.sendall(REQ_HDR.pack(OP_LOAD_BIT, 0, len(bin_data)) + bin_data)
+        _ = self._recv_response()  # should be empty on OK
 
-    def _send_request(self, opcode, address=0, size=0, payload=b""):
-        self.sock.sendall(REQ_HDR.pack(opcode, address, size) + payload)
-        return 
     
-    def _recv_bytes(self, n: int) -> bytes:
-        chunks = []
-        remaining = n
-        while remaining:
-            chunk = self.sock.recv(remaining)
-            if not chunk:
-                raise ConnectionError("server closed")
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        return b"".join(chunks)
 
     def _recv_response(self) -> bytes:
-        hdr = self._recv_bytes(RESP_HDR.size)
+        hdr = recv_exact(self.sock, RESP_HDR.size)
         status, size = RESP_HDR.unpack(hdr)
-        payload = self._recv_bytes(size) if size else b""
+        payload = recv_exact(self.sock, size) if size else b""
         if status == STATUS_OK:
             return payload
         # error
@@ -236,3 +217,5 @@ class ZynqTcpCtrlClient:
     def _bit2bin(self, bit_data):
         bin_data = bytes(np.frombuffer(bit_data, "i4").byteswap())
         return bin_data
+
+    

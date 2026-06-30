@@ -6,7 +6,10 @@ See examples [led_blink.py](example_redpitaya-125-14/led_blink.py) and [reserved
 
 
 
-## Remote Installation
+## Installation
+The Zynq TCP control libraries **requires both remote and local installation**:
+
+### Remote Installation
 * Open terminal window
 * Transfer [zynq_tcp_ctrl_remote](zynq_tcp_ctrl_remote) directory to your ZYNQ FPGA
 
@@ -30,7 +33,7 @@ See examples [led_blink.py](example_redpitaya-125-14/led_blink.py) and [reserved
     ```
 
 
-## Local Installation
+### Local Installation
 * Open a terminal window
 * Navigate to [zynq_tcp_ctr_local/zynq_tcp_ctrl](zynq_tcp_ctr_local/zynq_tcp_ctrl/)
     ```
